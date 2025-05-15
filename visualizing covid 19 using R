@@ -1,0 +1,128 @@
+
+
+DATA_SOURCE_MAPPING = 'visualizing-covid-19:https%3A%2F%2Fstorage.googleapis.com%2Fkaggle-data-sets%2F920863%2F1559469%2Fbundle%2Farchive.zip%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Dgcp-kaggle-com%2540kaggle-161607.iam.gserviceaccount.com%252F20241112%252Fauto%252Fstorage%252Fgoog4_request%26X-Goog-Date%3D20241112T060013Z%26X-Goog-Expires%3D259200%26X-Goog-SignedHeaders%3Dhost%26X-Goog-Signature%3D2df2194a0958369582073f3f17c1068b8b15800950f026115c88c34aadecbac5a193932238d978eebed77afab7a537adc1d845b48e0b8b4b367d41b9f3507ea0b0d73b63e0d384162e2184f368c949215166f541c8a6d6d40bd512eae7dc56ca8707dfbe9ac28f7694e55383441443d0c35a53b71705458c6e95f8d72be90b1d4fb6f883e0489ff65586b0c01d932e6515a69e3d365ae8a364d7943be20b52ec74a128794d954e48313a69254fc455ef64a57c937296a1ccc4677c58c58e7cfab2da49eaad7468396f8a0bfc3fed77d4a7301065caff6cf1cc893660a01024ed0929e3e74551e9892ad09cf1972dce9e4b3dfbe7f900e305754d0a9002dd37a3'
+
+KAGGLE_INPUT_PATH = '/kaggle/input'
+KAGGLE_WORKING_PATH = '/kaggle/working'
+
+system(paste0('sudo umount ', '/kaggle/input'))
+system(paste0('sudo rmdir ', '/kaggle/input'))
+system(paste0('sudo mkdir -p -- ', KAGGLE_INPUT_PATH), intern=TRUE)
+system(paste0('sudo chmod 777 ', KAGGLE_INPUT_PATH), intern=TRUE)
+system(
+  paste0('sudo ln -sfn ', KAGGLE_INPUT_PATH,' ',file.path('..', 'input')),
+  intern=TRUE)
+
+system(paste0('sudo mkdir -p -- ', KAGGLE_WORKING_PATH), intern=TRUE)
+system(paste0('sudo chmod 777 ', KAGGLE_WORKING_PATH), intern=TRUE)
+system(
+  paste0('sudo ln -sfn ', KAGGLE_WORKING_PATH, ' ', file.path('..', 'working')),
+  intern=TRUE)
+
+data_source_mappings = strsplit(DATA_SOURCE_MAPPING, ',')[[1]]
+for (data_source_mapping in data_source_mappings) {
+    path_and_url = strsplit(data_source_mapping, ':')
+    directory = path_and_url[[1]][1]
+    download_url = URLdecode(path_and_url[[1]][2])
+    filename = sub("\\?.+", "", download_url)
+    destination_path = file.path(KAGGLE_INPUT_PATH, directory)
+    print(paste0('Downloading and uncompressing: ', directory))
+    if (endsWith(filename, '.zip')){
+      temp = tempfile(fileext = '.zip')
+      download.file(download_url, temp)
+      unzip(temp, overwrite = TRUE, exdir = destination_path)
+      unlink(temp)
+    }
+    else{
+      temp = tempfile(fileext = '.tar')
+      download.file(download_url, temp)
+      untar(temp, exdir = destination_path)
+      unlink(temp)
+    }
+    print(paste0('Downloaded and uncompressed: ', directory))
+}
+
+print(paste0('Data source import complete'))
+
+library(readr)
+library(ggplot2)
+library(dplyr)
+
+confirmed_cases_worldwide <- read_csv("../input/visualizing-covid-19/Visualizing COVID-19/datasets/confirmed_cases_worldwide.csv")
+
+head(confirmed_cases_worldwide)
+
+options(repr.plot.width = 12, repr.plot.height = 8)
+
+ggplot(confirmed_cases_worldwide, aes(date, cum_cases)) +
+  geom_line() +
+  ylab("Cumulative confirmed cases")
+
+confirmed_cases_china_vs_world <- read_csv("../input/visualizing-covid-19/Visualizing COVID-19/datasets/confirmed_cases_china_vs_world.csv")
+
+glimpse(confirmed_cases_china_vs_world)
+
+plt_cum_confirmed_cases_china_vs_world <- ggplot(confirmed_cases_china_vs_world) +
+  geom_line(aes(date, cum_cases, color = is_china)) +
+  ylab("Cumulative confirmed cases")
+
+options(repr.plot.width = 12, repr.plot.height = 8)
+
+plt_cum_confirmed_cases_china_vs_world
+
+who_events <- tribble(
+  ~ date, ~ event,
+  "2020-01-30", "Global health\nemergency declared",
+  "2020-03-11", "Pandemic\ndeclared",
+  "2020-02-13", "China reporting\nchange"
+) %>%
+  mutate(date = as.Date(date))
+
+plt_cum_confirmed_cases_china_vs_world +
+  geom_vline(aes(xintercept = date), data = who_events, linetype = "dashed") +
+  geom_text(aes(date, label = event), data = who_events, y = 1e5)
+
+options(repr.plot.width = 12, repr.plot.height = 8)
+
+china_after_feb15 <- confirmed_cases_china_vs_world %>%
+  filter(is_china == "China", date >= "2020-02-15")
+
+ggplot(china_after_feb15, aes(date, cum_cases)) +
+  geom_line() +
+  geom_smooth(method = "lm", se = FALSE) +
+  ylab("Cumulative confirmed cases")
+
+options(repr.plot.width = 12, repr.plot.height = 8)
+not_china <- confirmed_cases_china_vs_world %>%
+  filter(is_china == "Not China")
+
+plt_not_china_trend_line <- ggplot(not_china, aes(date, cum_cases)) +
+  geom_line() +
+  geom_smooth(method = "lm", se = FALSE) +
+  ylab("Cumulative confirmed cases")
+
+options(repr.plot.width = 12, repr.plot.height = 8)
+
+plt_not_china_trend_line
+plt_not_china_trend_line + 
+  scale_y_log10()
+
+options(repr.plot.width = 12, repr.plot.height = 8)
+confirmed_cases_by_country <- read_csv("../input/visualizing-covid-19/Visualizing COVID-19/datasets/confirmed_cases_by_country.csv")
+glimpse(confirmed_cases_by_country)
+
+top_countries_by_total_cases <- confirmed_cases_by_country %>%
+  group_by(country) %>%
+  summarize(total_cases = max(cum_cases)) %>%
+  top_n(7, total_cases)
+
+top_countries_by_total_cases
+confirmed_cases_top7_outside_china <- read_csv("../input/visualizing-covid-19/Visualizing COVID-19/datasets/confirmed_cases_top7_outside_china.csv")
+
+glimpse(confirmed_cases_top7_outside_china)
+
+ggplot(confirmed_cases_top7_outside_china, aes(date, cum_cases, color = country)) +
+  geom_line() +
+  ylab("Cumulative confirmed cases")
+
+options(repr.plot.width = 12, repr.plot.height = 8)
